@@ -1,11 +1,12 @@
 
-name: Build Makhzani POS for Windows
+
+name: Build Makhzani POS V8.5 for Windows
 
 on:
   workflow_dispatch:
   push:
     paths:
-      - '**'
+      - 'Makhzani_POS_V8_5_Windows_BlackWhite_MultiBarcode.zip'
       - '.github/workflows/build-windows.yml'
 
 jobs:
@@ -16,69 +17,36 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Detect project folder
+      - name: Extract V8.5 project
         shell: pwsh
         run: |
-          $projectRoot = $null
+          $zip = Join-Path $env:GITHUB_WORKSPACE "Makhzani_POS_V8_5_Windows_BlackWhite_MultiBarcode.zip"
 
-          $candidates = @(
-            '.',
-            'source',
-            'mkhzny-POS',
-            'source/mkhzny-POS'
-          )
-
-          foreach ($candidate in $candidates) {
-            if (
-              (Test-Path "$candidate/package.json") -and
-              (Test-Path "$candidate/pnpm-lock.yaml") -and
-              (Test-Path "$candidate/pnpm-workspace.yaml")
-            ) {
-              $projectRoot = $candidate
-              break
-            }
+          if (-not (Test-Path $zip)) {
+            throw "لم يتم العثور على ملف ZIP الخاص بالإصدار V8.5"
           }
 
-          if (-not $projectRoot) {
-            $zip = Get-ChildItem -Path . -Filter '*.zip' -File |
-              Select-Object -First 1
+          New-Item -ItemType Directory -Path "source" -Force | Out-Null
+          Expand-Archive -LiteralPath $zip -DestinationPath "source" -Force
 
-            if ($zip) {
-              New-Item -ItemType Directory -Path 'source' -Force |
-                Out-Null
+      - name: Find project root
+        shell: pwsh
+        run: |
+          $found = Get-ChildItem -Path "source" -Filter "pnpm-workspace.yaml" -Recurse -File |
+            Where-Object {
+              (Test-Path (Join-Path $_.DirectoryName "package.json")) -and
+              (Test-Path (Join-Path $_.DirectoryName "pnpm-lock.yaml")) -and
+              (Test-Path (Join-Path $_.DirectoryName "artifacts/makhzani-pos/package.json"))
+            } |
+            Select-Object -First 1
 
-              Expand-Archive -LiteralPath $zip.FullName `
-                -DestinationPath 'source' -Force
-
-              $candidates = @(
-                'source',
-                'source/mkhzny-POS',
-                'source/Makhzani_POS',
-                'source/Makhzani_POS_V8_4'
-              )
-
-              foreach ($candidate in $candidates) {
-                if (
-                  (Test-Path "$candidate/package.json") -and
-                  (Test-Path "$candidate/pnpm-lock.yaml") -and
-                  (Test-Path "$candidate/pnpm-workspace.yaml")
-                ) {
-                  $projectRoot = $candidate
-                  break
-                }
-              }
-            }
+          if (-not $found) {
+            throw "لم يتم العثور على جذر مشروع Makhzani POS أو ملفات pnpm المطلوبة."
           }
 
-          if (-not $projectRoot) {
-            throw 'Project files not found. Check the uploaded project ZIP.'
-          }
-
-          $resolved = (Resolve-Path $projectRoot).Path
-          "PROJECT_ROOT=$resolved" |
-            Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-
-          Write-Host "Project root: $resolved"
+          $root = $found.DirectoryName
+          "PROJECT_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Project root: $root"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -95,31 +63,25 @@ jobs:
       - name: Install dependencies
         shell: pwsh
         run: |
-          Push-Location $env:PROJECT_ROOT
+          Set-Location $env:PROJECT_ROOT
           pnpm install --no-frozen-lockfile
-          $code = $LASTEXITCODE
-          Pop-Location
-
-          if ($code -ne 0) {
-            throw "Dependency installation failed: $code"
+          if ($LASTEXITCODE -ne 0) {
+            throw "فشل تثبيت المكتبات"
           }
 
-      - name: Build Windows application
+      - name: Build Windows installer
         shell: pwsh
         run: |
-          Push-Location $env:PROJECT_ROOT
+          Set-Location $env:PROJECT_ROOT
           pnpm --filter @workspace/makhzani-pos run desktop:dist
-          $code = $LASTEXITCODE
-          Pop-Location
-
-          if ($code -ne 0) {
-            throw "Windows build failed: $code"
+          if ($LASTEXITCODE -ne 0) {
+            throw "فشل بناء برنامج Windows"
           }
 
-      - name: Upload Windows installer
+      - name: Upload Windows EXE
         uses: actions/upload-artifact@v4
         with:
-          name: Makhzani-POS-Windows
-          path: ${{ env.PROJECT_ROOT }}/artifacts/makhzani-pos/release/*.exe
+          name: Makhzani-POS-V8.5-Windows
+          path: source/**/artifacts/makhzani-pos/release/*.exe
           if-no-files-found: error
-          retention-days: 30
+          retention-days: 14
