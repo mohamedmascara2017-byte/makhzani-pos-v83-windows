@@ -9,12 +9,76 @@ on:
       - '.github/workflows/build-windows.yml'
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Detect project folder
+        shell: pwsh
+        run: |
+          $projectRoot = $null
+
+          $candidates = @(
+            '.',
+            'source',
+            'mkhzny-POS',
+            'source/mkhzny-POS'
+          )
+
+          foreach ($candidate in $candidates) {
+            if (
+              (Test-Path "$candidate/package.json") -and
+              (Test-Path "$candidate/pnpm-lock.yaml") -and
+              (Test-Path "$candidate/pnpm-workspace.yaml")
+            ) {
+              $projectRoot = $candidate
+              break
+            }
+          }
+
+          if (-not $projectRoot) {
+            $zip = Get-ChildItem -Path . -Filter '*.zip' -File |
+              Select-Object -First 1
+
+            if ($zip) {
+              New-Item -ItemType Directory -Path 'source' -Force |
+                Out-Null
+
+              Expand-Archive -LiteralPath $zip.FullName `
+                -DestinationPath 'source' -Force
+
+              $candidates = @(
+                'source',
+                'source/mkhzny-POS',
+                'source/Makhzani_POS',
+                'source/Makhzani_POS_V8_4'
+              )
+
+              foreach ($candidate in $candidates) {
+                if (
+                  (Test-Path "$candidate/package.json") -and
+                  (Test-Path "$candidate/pnpm-lock.yaml") -and
+                  (Test-Path "$candidate/pnpm-workspace.yaml")
+                ) {
+                  $projectRoot = $candidate
+                  break
+                }
+              }
+            }
+          }
+
+          if (-not $projectRoot) {
+            throw 'Project files not found. Check the uploaded project ZIP.'
+          }
+
+          $resolved = (Resolve-Path $projectRoot).Path
+          "PROJECT_ROOT=$resolved" |
+            Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          Write-Host "Project root: $resolved"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -26,29 +90,36 @@ jobs:
         run: |
           corepack enable
           corepack prepare pnpm@10.8.1 --activate
+          pnpm --version
 
       - name: Install dependencies
         shell: pwsh
         run: |
-          Push-Location source
+          Push-Location $env:PROJECT_ROOT
           pnpm install --no-frozen-lockfile
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $code = $LASTEXITCODE
           Pop-Location
+
+          if ($code -ne 0) {
+            throw "Dependency installation failed: $code"
+          }
 
       - name: Build Windows application
         shell: pwsh
         run: |
-          Push-Location source
+          Push-Location $env:PROJECT_ROOT
           pnpm --filter @workspace/makhzani-pos run desktop:dist
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $code = $LASTEXITCODE
           Pop-Location
+
+          if ($code -ne 0) {
+            throw "Windows build failed: $code"
+          }
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
           name: Makhzani-POS-Windows
-          path: |
-            source/artifacts/makhzani-pos/release/*.exe
-            source/artifacts/makhzani-pos/release/*.msi
+          path: ${{ env.PROJECT_ROOT }}/artifacts/makhzani-pos/release/*.exe
           if-no-files-found: error
           retention-days: 30
