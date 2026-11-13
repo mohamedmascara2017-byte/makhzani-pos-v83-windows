@@ -1,91 +1,65 @@
-name: Build Makhzani POS V8.3 Windows EXE
+name: Build Makhzani POS for Windows
 
-on:
+"on":
   workflow_dispatch:
   push:
     paths:
-      - 'Makhzani_POS_V8_3_Windows_Updated.zip'
-      - '.github/workflows/build-windows.yml'
-
-permissions:
-  contents: read
-
-concurrency:
-  group: makhzani-pos-v83-windows
-  cancel-in-progress: false
+      - "Makhzani_POS_V8_4_Windows_Variants_Reports_DriveBackup.zip"
+      - ".github/workflows/build-windows.yml"
 
 jobs:
   build-windows:
     runs-on: windows-latest
-    timeout-minutes: 60
-    env:
-      CI: '1'
-      EXPO_NO_TELEMETRY: '1'
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-
     steps:
-      - name: Checkout repository
+      - name: Download repository files
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Extract the Windows project ZIP
+        shell: pwsh
+        run: |
+          $sourceZip = "Makhzani_POS_V8_4_Windows_Variants_Reports_DriveBackup.zip"
+          if (!(Test-Path -LiteralPath $sourceZip)) {
+            throw "لم أجد ملف المشروع: $sourceZip. ارفع ملف ZIP إلى جذر المستودع بالاسم نفسه."
+          }
+          if (Test-Path -LiteralPath "source") { Remove-Item -LiteralPath "source" -Recurse -Force }
+          New-Item -ItemType Directory -Path "source" | Out-Null
+          Expand-Archive -LiteralPath $sourceZip -DestinationPath "source" -Force
+          if (!(Test-Path -LiteralPath "source/package.json") -or !(Test-Path -LiteralPath "source/pnpm-lock.yaml") -or !(Test-Path -LiteralPath "source/pnpm-workspace.yaml")) {
+            throw "ملف ZIP لا يحتوي ملفات pnpm الأساسية في المجلد الرئيسي."
+          }
+
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10.8.1
-          run_install: false
-
-      - name: Extract updated source
+      - name: Enable pnpm
         shell: pwsh
         run: |
-          $zip = 'Makhzani_POS_V8_3_Windows_Updated.zip'
-          if (!(Test-Path $zip)) {
-            throw "Source archive not found: $zip"
-          }
-          New-Item -ItemType Directory -Force -Path 'project-unpacked' | Out-Null
-          Expand-Archive -LiteralPath $zip -DestinationPath 'project-unpacked' -Force
-          if (!(Test-Path 'project-unpacked/package.json')) {
-            throw 'The archive does not contain the project root package.json.'
-          }
-          if (!(Test-Path 'project-unpacked/artifacts/makhzani-pos/package.json')) {
-            throw 'Makhzani POS package.json was not found in the archive.'
-          }
+          corepack enable
+          corepack prepare pnpm@10.8.1 --activate
+          pnpm --version
 
-      - name: Install dependencies for Windows x64
-        working-directory: project-unpacked
+      - name: Install dependencies
         shell: pwsh
         run: |
-          pnpm install --no-frozen-lockfile
+          Push-Location source
+          pnpm install --frozen-lockfile
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Pop-Location
 
       - name: Build Windows installer
-        working-directory: project-unpacked
         shell: pwsh
         run: |
-          pnpm --filter @workspace/makhzani-pos desktop:dist
-
-      - name: Verify installer
-        shell: pwsh
-        run: |
-          $release = 'project-unpacked/artifacts/makhzani-pos/release'
-          if (!(Test-Path $release)) {
-            throw "Release directory was not created: $release"
-          }
-          $installers = @(Get-ChildItem -Path $release -Filter '*.exe' -File -Recurse)
-          if ($installers.Count -eq 0) {
-            throw 'No Windows EXE installer was generated.'
-          }
-          $installers | ForEach-Object {
-            Write-Host "Generated installer: $($_.FullName) ($($_.Length) bytes)"
-          }
+          Push-Location source
+          pnpm --filter @workspace/makhzani-pos run desktop:dist
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Pop-Location
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: Makhzani-POS-V8.3-Windows-Installer
-          path: project-unpacked/artifacts/makhzani-pos/release/*.exe
+          name: Makhzani-POS-Windows-Installer
+          path: source/artifacts/makhzani-pos/release/*.exe
           if-no-files-found: error
-          retention-days: 30
-
+          retention-days: 14
