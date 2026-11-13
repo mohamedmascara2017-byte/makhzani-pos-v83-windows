@@ -1,34 +1,22 @@
+
 name: Build Makhzani POS for Windows
 
-"on":
+on:
   workflow_dispatch:
   push:
     paths:
-      - "Makhzani_POS_V8_4_Windows_Variants_Reports_DriveBackup.zip"
-      - ".github/workflows/build-windows.yml"
+      - '**'
+      - '.github/workflows/build-windows.yml'
 
 jobs:
-  build-windows:
+  build:
     runs-on: windows-latest
+
     steps:
-      - name: Download repository files
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract the Windows project ZIP
-        shell: pwsh
-        run: |
-          $sourceZip = "Makhzani_POS_V8_4_Windows_Variants_Reports_DriveBackup.zip"
-          if (!(Test-Path -LiteralPath $sourceZip)) {
-            throw "لم أجد ملف المشروع: $sourceZip. ارفع ملف ZIP إلى جذر المستودع بالاسم نفسه."
-          }
-          if (Test-Path -LiteralPath "source") { Remove-Item -LiteralPath "source" -Recurse -Force }
-          New-Item -ItemType Directory -Path "source" | Out-Null
-          Expand-Archive -LiteralPath $sourceZip -DestinationPath "source" -Force
-          if (!(Test-Path -LiteralPath "source/package.json") -or !(Test-Path -LiteralPath "source/pnpm-lock.yaml") -or !(Test-Path -LiteralPath "source/pnpm-workspace.yaml")) {
-            throw "ملف ZIP لا يحتوي ملفات pnpm الأساسية في المجلد الرئيسي."
-          }
-
-      - name: Set up Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -38,17 +26,16 @@ jobs:
         run: |
           corepack enable
           corepack prepare pnpm@10.8.1 --activate
-          pnpm --version
 
       - name: Install dependencies
         shell: pwsh
         run: |
           Push-Location source
-          pnpm install --frozen-lockfile
+          pnpm install --no-frozen-lockfile
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           Pop-Location
 
-      - name: Build Windows installer
+      - name: Build Windows application
         shell: pwsh
         run: |
           Push-Location source
@@ -59,7 +46,9 @@ jobs:
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: Makhzani-POS-Windows-Installer
-          path: source/artifacts/makhzani-pos/release/*.exe
+          name: Makhzani-POS-Windows
+          path: |
+            source/artifacts/makhzani-pos/release/*.exe
+            source/artifacts/makhzani-pos/release/*.msi
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 30
