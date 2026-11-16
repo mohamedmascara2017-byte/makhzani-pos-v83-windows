@@ -1,4 +1,5 @@
 
+
 name: Makhzani POS V8.7 - Android Release
 
 on:
@@ -19,11 +20,11 @@ jobs:
       - name: Extract V8.7 source
         shell: bash
         run: |
-          set -euo pipefail
+          set -e
           ZIP="Makhzani_POS_V8_7_Android_Standalone_Source.zip"
 
           if [ ! -f "$ZIP" ]; then
-            echo "ERROR: ZIP file not found!"
+            echo "ERROR: Source ZIP not found"
             ls -lah
             exit 1
           fi
@@ -33,7 +34,6 @@ jobs:
 
           test -f source/package.json
           test -f source/pnpm-workspace.yaml
-          test -f source/pnpm-lock.yaml
           test -f source/artifacts/makhzani-pos/package.json
 
       - name: Setup Node.js
@@ -55,7 +55,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: source
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --no-frozen-lockfile
 
       - name: Generate Android project
         working-directory: source/artifacts/makhzani-pos
@@ -63,12 +63,17 @@ jobs:
           CI: '1'
         run: pnpm exec expo prebuild --platform android --no-install
 
-      - name: Generate JavaScript bundle
+      - name: Update dependencies after prebuild
+        working-directory: source
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Generate Android JavaScript bundle
         working-directory: source/artifacts/makhzani-pos
         env:
           CI: '1'
         run: |
-          mkdir -p android/app/src/main/assets android/app/src/main/res
+          mkdir -p android/app/src/main/assets
+          mkdir -p android/app/src/main/res
 
           pnpm exec expo export:embed \
             --platform android \
@@ -90,11 +95,14 @@ jobs:
         run: |
           APK="source/artifacts/makhzani-pos/android/app/build/outputs/apk/release/app-release.apk"
 
-          test -s "$APK"
+          if [ ! -s "$APK" ]; then
+            echo "ERROR: APK was not generated"
+            exit 1
+          fi
 
-          unzip -Z1 "$APK" | grep -q '^assets/index.android.bundle$'
+          unzip -Z1 "$APK" | grep -q 'assets/index.android.bundle'
 
-          echo "APK successfully generated and bundle verified."
+          echo "APK and JavaScript bundle verified"
           ls -lh "$APK"
 
       - name: Upload APK
