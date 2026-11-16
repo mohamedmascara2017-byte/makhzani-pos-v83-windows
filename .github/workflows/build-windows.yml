@@ -1,4 +1,5 @@
 
+
 name: Build Makhzani POS V8.6 for Windows
 
 on:
@@ -9,8 +10,30 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Download project
+      - name: Checkout project
         uses: actions/checkout@v4
+
+      - name: Find project folder
+        shell: pwsh
+        run: |
+          $found = Get-ChildItem -Path . -Filter "pnpm-workspace.yaml" -Recurse -File |
+            Where-Object {
+              (Test-Path (Join-Path $_.DirectoryName "package.json")) -and
+              (Test-Path (Join-Path $_.DirectoryName "artifacts/makhzani-pos/package.json"))
+            } |
+            Select-Object -First 1
+
+          if (-not $found) {
+            Write-Host "Project files were not found."
+            Write-Host "Folders and package.json files:"
+            Get-ChildItem -Path . -Filter "package.json" -Recurse -File |
+              Select-Object -ExpandProperty FullName
+            throw "Could not locate the Makhzani POS project root."
+          }
+
+          $project = $found.DirectoryName
+          "PROJECT_DIR=$project" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "Project found: $project"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -24,14 +47,16 @@ jobs:
           corepack prepare pnpm@10.8.1 --activate
 
       - name: Install dependencies
+        working-directory: ${{ env.PROJECT_DIR }}
         run: pnpm install --no-frozen-lockfile
 
       - name: Build Windows installer
+        working-directory: ${{ env.PROJECT_DIR }}
         run: pnpm --filter @workspace/makhzani-pos run desktop:dist
 
       - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
           name: Makhzani-POS-V8.6-Windows-Installer
-          path: artifacts/makhzani-pos/release/*.exe
+          path: ${{ env.PROJECT_DIR }}/artifacts/makhzani-pos/release/*.exe
           if-no-files-found: error
