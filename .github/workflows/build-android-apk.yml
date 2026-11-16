@@ -1,4 +1,4 @@
-
+د
 name: Build Makhzani POS V8.7 Android APK
 
 on:
@@ -13,11 +13,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Extract V8.7 source
+        shell: bash
         run: |
           ZIP="Makhzani_POS_V8_7_GitHub_APK_Build.zip"
 
           if [ ! -f "$ZIP" ]; then
-            echo "ERROR: V8.7 ZIP file not found!"
+            echo "ERROR: V8.7 ZIP file not found"
             ls -la
             exit 1
           fi
@@ -25,14 +26,15 @@ jobs:
           mkdir -p source
           unzip -o "$ZIP" -d source
 
-          if [ ! -f "source/package.json" ]; then
-            echo "ERROR: package.json missing after extraction"
+          if [ ! -f source/package.json ]; then
+            echo "ERROR: Root package.json not found"
             find source -name package.json
             exit 1
           fi
 
-          if [ ! -f "source/artifacts/makhzani-pos/package.json" ]; then
-            echo "ERROR: Android app package.json missing"
+          if [ ! -f source/artifacts/makhzani-pos/package.json ]; then
+            echo "ERROR: Android app package.json not found"
+            find source -name package.json
             exit 1
           fi
 
@@ -52,16 +54,23 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install project dependencies
+      - name: Install dependencies
         working-directory: source
         run: pnpm install --no-frozen-lockfile
 
       - name: Generate Android project
         working-directory: source/artifacts/makhzani-pos
-        run: pnpm exec expo prebuild --platform android --non-interactive
+        shell: bash
+        run: |
+          CI=1 pnpm exec expo prebuild --platform android --no-install
+
+      - name: Install updated dependencies
+        working-directory: source
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build APK
         working-directory: source/artifacts/makhzani-pos/android
+        shell: bash
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
@@ -69,7 +78,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Makhzani-POS-V8.7-APK
+          name: Makhzani-POS-V8.7-Android-APK
           path: source/artifacts/makhzani-pos/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
