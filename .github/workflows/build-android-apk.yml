@@ -3,12 +3,6 @@ name: Build Makhzani POS Android APK
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'artifacts/makhzani-pos/**'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - '.github/workflows/build-android-apk.yml'
 
 jobs:
   build-android:
@@ -17,6 +11,20 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
+
+      - name: Locate package.json
+        id: locate
+        shell: bash
+        run: |
+          FILE=$(find . -name package.json -not -path '*/node_modules/*' | grep '/artifacts/makhzani-pos/package.json' | head -n 1)
+          if [ -z "$FILE" ]; then
+            echo "ERROR: artifacts/makhzani-pos/package.json not found"
+            find . -maxdepth 4 -name package.json
+            exit 1
+          fi
+          DIR=$(dirname "$FILE")
+          echo "app_dir=$DIR" >> "$GITHUB_OUTPUT"
+          echo "Found app at $DIR"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -35,14 +43,15 @@ jobs:
           java-version: '17'
 
       - name: Install dependencies
+        working-directory: ${{ steps.locate.outputs.app_dir }}
         run: pnpm install --no-frozen-lockfile
 
       - name: Generate Android project
-        working-directory: artifacts/makhzani-pos
+        working-directory: ${{ steps.locate.outputs.app_dir }}
         run: pnpm exec expo prebuild --platform android --non-interactive
 
       - name: Build APK
-        working-directory: artifacts/makhzani-pos/android
+        working-directory: ${{ steps.locate.outputs.app_dir }}/android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
@@ -51,6 +60,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Makhzani-POS-V8.7-Android-APK
-          path: artifacts/makhzani-pos/android/app/build/outputs/apk/debug/app-debug.apk
+          path: ${{ steps.locate.outputs.app_dir }}/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
