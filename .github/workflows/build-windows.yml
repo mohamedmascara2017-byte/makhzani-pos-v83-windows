@@ -1,51 +1,72 @@
 
-
 name: Build Makhzani POS V8.6 for Windows
 
 on:
   workflow_dispatch:
 
 jobs:
-  build-windows:
+  build:
     runs-on: windows-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify project
+      - name: Extract project ZIP
         shell: pwsh
         run: |
-          if (!(Test-Path "package.json")) {
-            throw "package.json missing from repository root"
-          }
-          if (!(Test-Path "pnpm-workspace.yaml")) {
-            throw "pnpm-workspace.yaml missing"
-          }
-          if (!(Test-Path "artifacts/makhzani-pos/package.json")) {
-            throw "Makhzani POS package missing"
+          $zip = Get-ChildItem -Path . -Filter "*.zip" -File -Recurse |
+            Where-Object { $_.Name -like "*V8_6*GitHub_Ready*" -or $_.Name -like "*V8_6*CloudSync*" } |
+            Select-Object -First 1
+
+          if (!$zip) {
+            Get-ChildItem -Force
+            throw "Upload the Makhzani V8.6 ZIP file to the repository root."
           }
 
-      - name: Setup Node
+          $dest = Join-Path $env:RUNNER_TEMP "makhzani-source"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Expand-Archive -Path $zip.FullName -DestinationPath $dest -Force
+
+          $workspace = Get-ChildItem $dest -Filter "pnpm-workspace.yaml" -Recurse -File |
+            Where-Object {
+              (Test-Path (Join-Path $_.DirectoryName "package.json")) -and
+              (Test-Path (Join-Path $_.DirectoryName "artifacts/makhzani-pos/package.json"))
+            } |
+            Select-Object -First 1
+
+          if (!$workspace) {
+            Get-ChildItem $dest -Recurse -File |
+              Select-Object -First 50 -ExpandProperty FullName
+            throw "Project files not found inside ZIP."
+          }
+
+          "PROJECT_DIR=$($workspace.DirectoryName)" |
+            Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
 
-      - name: Enable pnpm
+      - name: Setup pnpm
         shell: pwsh
         run: |
           corepack enable
           corepack prepare pnpm@10.8.1 --activate
 
       - name: Install dependencies
+        working-directory: ${{ env.PROJECT_DIR }}
         run: pnpm install --no-frozen-lockfile
 
       - name: Build Windows
+        working-directory: ${{ env.PROJECT_DIR }}
         run: pnpm --filter @workspace/makhzani-pos run desktop:dist
 
       - name: Upload EXE
         uses: actions/upload-artifact@v4
         with:
-          name: Makhzani-POS-V8.6-Windows-Installer
-          path: artifacts/makhzani-pos/release/*.exe
+          name: Makhzani-POS-V8.6-Windows
+          path: ${{ env.PROJECT_DIR }}/artifacts/makhzani-pos/release/*.exe
           if-no-files-found: error
+
