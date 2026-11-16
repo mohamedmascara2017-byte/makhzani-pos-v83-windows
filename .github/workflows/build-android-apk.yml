@@ -4,6 +4,9 @@ name: Build Makhzani POS V8.7 Android APK
 on:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-android:
     runs-on: ubuntu-latest
@@ -18,13 +21,15 @@ jobs:
           ZIP="Makhzani_POS_V8_7_GitHub_APK_Build.zip"
 
           if [ ! -f "$ZIP" ]; then
-            echo "ERROR: V8.7 ZIP file not found"
+            echo "ERROR: V8.7 ZIP file not found!"
             ls -la
             exit 1
           fi
 
           mkdir -p source
           unzip -o "$ZIP" -d source
+
+          echo "Checking project files..."
 
           if [ ! -f source/package.json ]; then
             echo "ERROR: Root package.json not found"
@@ -68,17 +73,37 @@ jobs:
         working-directory: source
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build APK
+      - name: Verify Android project
+        shell: bash
+        run: |
+          test -f source/artifacts/makhzani-pos/android/gradlew
+          test -f source/artifacts/makhzani-pos/android/app/build.gradle
+          echo "Android project is ready."
+
+      - name: Build standalone Release APK
         working-directory: source/artifacts/makhzani-pos/android
         shell: bash
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease --no-daemon
 
-      - name: Upload APK
+      - name: Check APK
+        shell: bash
+        run: |
+          APK="source/artifacts/makhzani-pos/android/app/build/outputs/apk/release/app-release.apk"
+
+          if [ ! -f "$APK" ]; then
+            echo "ERROR: Release APK was not generated"
+            find source/artifacts/makhzani-pos/android/app/build/outputs -type f
+            exit 1
+          fi
+
+          ls -lh "$APK"
+
+      - name: Upload final APK
         uses: actions/upload-artifact@v4
         with:
-          name: Makhzani-POS-V8.7-Android-APK
-          path: source/artifacts/makhzani-pos/android/app/build/outputs/apk/debug/app-debug.apk
+          name: Makhzani-POS-V8.7-Release-APK
+          path: source/artifacts/makhzani-pos/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
