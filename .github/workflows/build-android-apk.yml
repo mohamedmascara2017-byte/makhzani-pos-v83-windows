@@ -1,5 +1,5 @@
 
-name: Build Makhzani POS V8.7 Android APK
+name: Makhzani POS V8.7 - Android Release
 
 on:
   workflow_dispatch:
@@ -8,8 +8,9 @@ permissions:
   contents: read
 
 jobs:
-  build-android:
+  android-release:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
@@ -18,30 +19,22 @@ jobs:
       - name: Extract V8.7 source
         shell: bash
         run: |
-          ZIP="Makhzani_POS_V8_7_GitHub_APK_Build.zip"
+          set -euo pipefail
+          ZIP="Makhzani_POS_V8_7_Android_Standalone_Source.zip"
 
           if [ ! -f "$ZIP" ]; then
-            echo "ERROR: V8.7 ZIP file not found!"
-            ls -la
+            echo "ERROR: ZIP file not found!"
+            ls -lah
             exit 1
           fi
 
           mkdir -p source
-          unzip -o "$ZIP" -d source
+          unzip -q -o "$ZIP" -d source
 
-          echo "Checking project files..."
-
-          if [ ! -f source/package.json ]; then
-            echo "ERROR: Root package.json not found"
-            find source -name package.json
-            exit 1
-          fi
-
-          if [ ! -f source/artifacts/makhzani-pos/package.json ]; then
-            echo "ERROR: Android app package.json not found"
-            find source -name package.json
-            exit 1
-          fi
+          test -f source/package.json
+          test -f source/pnpm-workspace.yaml
+          test -f source/pnpm-lock.yaml
+          test -f source/artifacts/makhzani-pos/package.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -52,6 +45,7 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 10.8.1
+          run_install: false
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -61,49 +55,52 @@ jobs:
 
       - name: Install dependencies
         working-directory: source
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Generate Android project
         working-directory: source/artifacts/makhzani-pos
-        shell: bash
+        env:
+          CI: '1'
+        run: pnpm exec expo prebuild --platform android --no-install
+
+      - name: Generate JavaScript bundle
+        working-directory: source/artifacts/makhzani-pos
+        env:
+          CI: '1'
         run: |
-          CI=1 pnpm exec expo prebuild --platform android --no-install
+          mkdir -p android/app/src/main/assets android/app/src/main/res
 
-      - name: Install updated dependencies
-        working-directory: source
-        run: pnpm install --no-frozen-lockfile
+          pnpm exec expo export:embed \
+            --platform android \
+            --dev false \
+            --reset-cache \
+            --bundle-output android/app/src/main/assets/index.android.bundle \
+            --assets-dest android/app/src/main/res
 
-      - name: Verify Android project
-        shell: bash
-        run: |
-          test -f source/artifacts/makhzani-pos/android/gradlew
-          test -f source/artifacts/makhzani-pos/android/app/build.gradle
-          echo "Android project is ready."
+          test -s android/app/src/main/assets/index.android.bundle
 
-      - name: Build standalone Release APK
+      - name: Build Release APK
         working-directory: source/artifacts/makhzani-pos/android
-        shell: bash
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
+          ./gradlew --no-daemon clean assembleRelease
 
-      - name: Check APK
+      - name: Verify APK
         shell: bash
         run: |
           APK="source/artifacts/makhzani-pos/android/app/build/outputs/apk/release/app-release.apk"
 
-          if [ ! -f "$APK" ]; then
-            echo "ERROR: Release APK was not generated"
-            find source/artifacts/makhzani-pos/android/app/build/outputs -type f
-            exit 1
-          fi
+          test -s "$APK"
 
+          unzip -Z1 "$APK" | grep -q '^assets/index.android.bundle$'
+
+          echo "APK successfully generated and bundle verified."
           ls -lh "$APK"
 
-      - name: Upload final APK
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Makhzani-POS-V8.7-Release-APK
+          name: Makhzani-POS-V8.7-Standalone-APK
           path: source/artifacts/makhzani-pos/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
