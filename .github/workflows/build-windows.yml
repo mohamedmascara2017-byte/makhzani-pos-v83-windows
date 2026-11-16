@@ -1,52 +1,16 @@
 
-
-name: Build Makhzani POS V8.5 for Windows
+name: Build Makhzani POS V8.6 for Windows
 
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - 'Makhzani_POS_V8_5_Windows_BlackWhite_MultiBarcode.zip'
-      - '.github/workflows/build-windows.yml'
 
 jobs:
   build-windows:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout repository
+      - name: Download project
         uses: actions/checkout@v4
-
-      - name: Extract V8.5 project
-        shell: pwsh
-        run: |
-          $zip = Join-Path $env:GITHUB_WORKSPACE "Makhzani_POS_V8_5_Windows_BlackWhite_MultiBarcode.zip"
-
-          if (-not (Test-Path $zip)) {
-            throw "لم يتم العثور على ملف ZIP الخاص بالإصدار V8.5"
-          }
-
-          New-Item -ItemType Directory -Path "source" -Force | Out-Null
-          Expand-Archive -LiteralPath $zip -DestinationPath "source" -Force
-
-      - name: Find project root
-        shell: pwsh
-        run: |
-          $found = Get-ChildItem -Path "source" -Filter "pnpm-workspace.yaml" -Recurse -File |
-            Where-Object {
-              (Test-Path (Join-Path $_.DirectoryName "package.json")) -and
-              (Test-Path (Join-Path $_.DirectoryName "pnpm-lock.yaml")) -and
-              (Test-Path (Join-Path $_.DirectoryName "artifacts/makhzani-pos/package.json"))
-            } |
-            Select-Object -First 1
-
-          if (-not $found) {
-            throw "لم يتم العثور على جذر مشروع Makhzani POS أو ملفات pnpm المطلوبة."
-          }
-
-          $root = $found.DirectoryName
-          "PROJECT_ROOT=$root" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          Write-Host "Project root: $root"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -58,30 +22,16 @@ jobs:
         run: |
           corepack enable
           corepack prepare pnpm@10.8.1 --activate
-          pnpm --version
 
       - name: Install dependencies
-        shell: pwsh
-        run: |
-          Set-Location $env:PROJECT_ROOT
-          pnpm install --no-frozen-lockfile
-          if ($LASTEXITCODE -ne 0) {
-            throw "فشل تثبيت المكتبات"
-          }
+        run: pnpm install --no-frozen-lockfile
 
       - name: Build Windows installer
-        shell: pwsh
-        run: |
-          Set-Location $env:PROJECT_ROOT
-          pnpm --filter @workspace/makhzani-pos run desktop:dist
-          if ($LASTEXITCODE -ne 0) {
-            throw "فشل بناء برنامج Windows"
-          }
+        run: pnpm --filter @workspace/makhzani-pos run desktop:dist
 
-      - name: Upload Windows EXE
+      - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: Makhzani-POS-V8.5-Windows
-          path: source/**/artifacts/makhzani-pos/release/*.exe
+          name: Makhzani-POS-V8.6-Windows-Installer
+          path: artifacts/makhzani-pos/release/*.exe
           if-no-files-found: error
-          retention-days: 14
