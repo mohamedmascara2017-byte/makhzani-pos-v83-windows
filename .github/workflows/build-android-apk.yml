@@ -1,51 +1,40 @@
 
-name: Build Makhzani POS Android APK
+name: Build Makhzani POS V8.7 Android APK
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-      - master
 
 jobs:
   build-android:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Show repository structure
-        shell: bash
+      - name: Extract V8.7 source
         run: |
-          echo "===== ROOT ====="
-          pwd
-          ls -la
-          echo "===== PACKAGE FILES ====="
-          find . -name package.json \
-            -not -path '*/node_modules/*' \
-            -not -path '*/.git/*' || true
+          ZIP="Makhzani_POS_V8_7_GitHub_APK_Build.zip"
 
-      - name: Find application folder
-        id: locate
-        shell: bash
-        run: |
-          FILE=$(find . -name package.json \
-            -not -path '*/node_modules/*' \
-            -not -path '*/.git/*' \
-            | head -n 1)
-
-          if [ -z "$FILE" ]; then
-            echo "ERROR: No package.json found."
-            echo "The application source files may not be uploaded."
-            find . -maxdepth 5 -type f | head -250
+          if [ ! -f "$ZIP" ]; then
+            echo "ERROR: V8.7 ZIP file not found!"
+            ls -la
             exit 1
           fi
 
-          DIR=$(dirname "$FILE")
-          echo "app_dir=$DIR" >> "$GITHUB_OUTPUT"
-          echo "Application folder: $DIR"
+          mkdir -p source
+          unzip -o "$ZIP" -d source
+
+          if [ ! -f "source/package.json" ]; then
+            echo "ERROR: package.json missing after extraction"
+            find source -name package.json
+            exit 1
+          fi
+
+          if [ ! -f "source/artifacts/makhzani-pos/package.json" ]; then
+            echo "ERROR: Android app package.json missing"
+            exit 1
+          fi
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -63,30 +52,16 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Install dependencies
-        working-directory: ${{ steps.locate.outputs.app_dir }}
-        shell: bash
-        run: |
-          if [ -f pnpm-lock.yaml ]; then
-            pnpm install --no-frozen-lockfile
-          else
-            echo "No pnpm-lock.yaml found; installing from package.json"
-            pnpm install --no-frozen-lockfile
-          fi
-
-      - name: Check Expo project
-        working-directory: ${{ steps.locate.outputs.app_dir }}
-        run: |
-          node -e "const p=require('./package.json'); console.log('Project:',p.name || 'Makhzani POS')"
-          pnpm exec expo --version
+      - name: Install project dependencies
+        working-directory: source
+        run: pnpm install --no-frozen-lockfile
 
       - name: Generate Android project
-        working-directory: ${{ steps.locate.outputs.app_dir }}
+        working-directory: source/artifacts/makhzani-pos
         run: pnpm exec expo prebuild --platform android --non-interactive
 
-      - name: Build Android APK
-        working-directory: ${{ steps.locate.outputs.app_dir }}/android
-        shell: bash
+      - name: Build APK
+        working-directory: source/artifacts/makhzani-pos/android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
@@ -94,7 +69,7 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: Makhzani-POS-Android-APK
-          path: ${{ steps.locate.outputs.app_dir }}/android/app/build/outputs/apk/debug/app-debug.apk
+          name: Makhzani-POS-V8.7-APK
+          path: source/artifacts/makhzani-pos/android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 14
