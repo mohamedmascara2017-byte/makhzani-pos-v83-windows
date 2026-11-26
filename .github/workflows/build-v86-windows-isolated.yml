@@ -1,0 +1,54 @@
+name: Build Makhzani V8.6 Windows installer (isolated source)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout isolated V8.6 work branch
+        uses: actions/checkout@v4
+        with:
+          ref: makhzani-v86-source-work
+          path: source
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm
+        shell: pwsh
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.8.1 --activate
+          pnpm --version
+
+      - name: Verify Windows project structure
+        shell: pwsh
+        run: |
+          if (!(Test-Path "source/v86-source/package.json")) { throw "Workspace package.json missing." }
+          if (!(Test-Path "source/v86-source/artifacts/makhzani-pos/package.json")) { throw "Makhzani POS package.json missing." }
+          if (!(Test-Path "source/v86-source/artifacts/makhzani-pos/electron/main.cjs")) { throw "Electron entry point missing." }
+
+      - name: Install workspace dependencies
+        working-directory: source/v86-source
+        shell: pwsh
+        run: pnpm install --no-frozen-lockfile --config.dangerouslyAllowAllBuilds=true
+
+      - name: Build Windows installer
+        working-directory: source/v86-source
+        shell: pwsh
+        run: pnpm --filter @workspace/makhzani-pos run desktop:dist
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Makhzani-POS-V8.6-AutoSync-Windows
+          path: source/v86-source/artifacts/makhzani-pos/release/*.exe
+          if-no-files-found: error
+          retention-days: 14
