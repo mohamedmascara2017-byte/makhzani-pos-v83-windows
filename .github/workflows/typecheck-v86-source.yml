@@ -2,6 +2,9 @@ name: Check Makhzani V8.6 source
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/typecheck-v86-source.yml'
 
 permissions:
   contents: read
