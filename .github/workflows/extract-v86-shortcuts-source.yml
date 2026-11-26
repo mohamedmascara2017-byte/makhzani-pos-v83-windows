@@ -1,0 +1,66 @@
+name: Extract V8.6 shortcuts source safely
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout work branch
+        uses: actions/checkout@v4
+        with:
+          ref: makhzani-v86-source-work
+          fetch-depth: 0
+
+      - name: Verify and extract the correct V8.6 archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE="Makhzani_POS_V8_6_Shortcuts_Empty_Update.zip"
+          test -f "$ARCHIVE" || { echo "Missing archive: $ARCHIVE"; exit 1; }
+
+          TMP_DIR="$(mktemp -d)"
+          unzip -q "$ARCHIVE" -d "$TMP_DIR"
+
+          test -f "$TMP_DIR/package.json" || { echo "Archive root package.json is missing"; exit 1; }
+          test -f "$TMP_DIR/artifacts/makhzani-pos/app/(tabs)/pos.tsx" || { echo "POS source file missing"; exit 1; }
+          test -f "$TMP_DIR/artifacts/makhzani-pos/components/StoreContext.tsx" || { echo "StoreContext source missing"; exit 1; }
+          test -f "$TMP_DIR/artifacts/makhzani-pos/lib/supabaseSync.ts" || { echo "Supabase sync source missing"; exit 1; }
+
+          DEST="v86-source"
+          mkdir -p "$DEST"
+          rsync -a --delete \
+            --exclude='.git/' \
+            --exclude='node_modules/' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='*.pem' \
+            --exclude='*.key' \
+            --exclude='credentials.json' \
+            "$TMP_DIR/" "$DEST/"
+
+          echo "V8.6 source extracted to $DEST"
+          echo "Total source files: $(find "$DEST" -type f | wc -l)"
+          echo "POS source files: $(find "$DEST/artifacts/makhzani-pos" -type f | wc -l)"
+          echo "Verified POS files:"
+          ls -l "$DEST/artifacts/makhzani-pos/app/(tabs)/pos.tsx" \
+                "$DEST/artifacts/makhzani-pos/components/StoreContext.tsx" \
+                "$DEST/artifacts/makhzani-pos/lib/supabaseSync.ts"
+
+      - name: Commit extracted source to work branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add v86-source
+          if git diff --cached --quiet; then
+            echo "No source changes to commit."
+          else
+            git commit -m "Extract verified V8.6 shortcuts source"
+            git push origin HEAD:makhzani-v86-source-work
+          fi
