@@ -1,4 +1,4 @@
-name: Check Makhzani V8.6 source (isolated)
+name: Check Makhzani V8.6 source (isolated, second pass)
 
 on:
   workflow_dispatch:
