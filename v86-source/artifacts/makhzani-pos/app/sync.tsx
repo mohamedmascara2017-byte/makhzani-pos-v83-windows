@@ -238,8 +238,8 @@ export default function SyncScreen() {
       </Card> : null}
 
       {connectedEmail ? <Card style={styles.card}>
-        <View style={styles.heading}><Feather name="refresh-cw" size={20} color={colors.primary} /><Text style={[styles.cardTitle, { color: colors.foreground }]}>نقل البيانات يدوياً</Text></View>
-        <Text style={[styles.info, { color: colors.mutedForeground }]}>اختر اتجاه النقل بوضوح. الرفع يستبدل النسخة السحابية، والتنزيل يستبدل بيانات هذا الجهاز. لا توجد مزامنة تلقائية أو دمج فوري بين الأجهزة في هذه المرحلة.</Text>
+        <View style={styles.heading}><Feather name="refresh-cw" size={20} color={colors.primary} /><Text style={[styles.cardTitle, { color: colors.foreground }]}>المزامنة التلقائية والنسخ اليدوي</Text></View>
+        <Text style={[styles.info, { color: colors.mutedForeground }]}>بعد إعداد المزامنة الأولية، يراقب التطبيق تغييرات الجهاز والسحابة كل 5 ثوانٍ أثناء تشغيل التطبيق والاتصال بالإنترنت. يرسل التغييرات المحلية تلقائياً، ويستقبل تغييرات السحابة إذا لم توجد تعديلات محلية متعارضة. عند انقطاع الإنترنت تبقى آخر البيانات المحلية محفوظة وتُعاد محاولة الإرسال عند عودة الاتصال. التعديلات المتزامنة على الجهازين تُعرض كتعارض للاختيار اليدوي، ولا تُدمج المبيعات والمخزون عشوائياً.</Text>
         <Pressable disabled={busy || role !== 'owner'} onPress={uploadLocal} style={[styles.primaryButton, { backgroundColor: colors.primary, opacity: role !== 'owner' ? 0.5 : 1 }]}><Feather name="upload-cloud" size={18} color="#fff" /><Text style={styles.primaryText}>رفع بيانات هذا الجهاز إلى السحابة</Text></Pressable>
         <Pressable disabled={busy} onPress={downloadCloud} style={[styles.secondaryButton, { borderColor: colors.border }]}><Feather name="download-cloud" size={18} color={colors.primary} /><Text style={[styles.secondaryText, { color: colors.foreground }]}>تنزيل بيانات السحابة إلى هذا الجهاز</Text></Pressable>
         {role !== 'owner' ? <Text style={[styles.small, { color: colors.mutedForeground }]}>رفع البيانات متاح لحساب المالك فقط.</Text> : null}
@@ -254,7 +254,7 @@ export default function SyncScreen() {
         <Text style={[styles.noteTitle, { color: colors.foreground }]}>ملاحظات مهمة قبل التفعيل الكامل</Text>
         <Text style={[styles.info, { color: colors.mutedForeground }]}>• بيانات التطبيق المحلية لا تُحذف عند تسجيل الدخول.</Text>
         <Text style={[styles.info, { color: colors.mutedForeground }]}>• أرقام PIN للموظفين تبقى على كل جهاز ولا تُرفع للسحابة.</Text>
-        <Text style={[styles.info, { color: colors.mutedForeground }]}>• هذه مرحلة نقل نسخة يدوية محمية برقم مراجعة لمنع الكتابة فوق تحديث أحدث دون تنبيه.</Text>
+        <Text style={[styles.info, { color: colors.mutedForeground }]}>• المزامنة التلقائية تعمل بعد إنشاء خط أساس أول مرة عبر رفع أو تنزيل يدوي، وتستخدم رقم المراجعة لمنع الكتابة فوق تحديث أحدث.</Text>
         <Text style={[styles.info, { color: colors.mutedForeground }]}>• المزامنة التلقائية، قائمة انتظار العمل دون إنترنت، وWi‑Fi المحلي تحتاج مراحل تطوير واختبار إضافية.</Text>
       </Card>
       {busy ? <View style={styles.busy}><ActivityIndicator color={colors.primary} /><Text style={{ color: colors.mutedForeground }}>جارٍ الاتصال…</Text></View> : null}
