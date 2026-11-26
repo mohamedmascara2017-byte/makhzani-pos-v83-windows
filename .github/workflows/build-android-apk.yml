@@ -20,24 +20,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract V8.7 source
-        shell: bash
+      - name: Verify source tree
         run: |
           set -e
-          ZIP="Makhzani_POS_V8_7_Android_Standalone_Source.zip"
-
-          if [ ! -f "$ZIP" ]; then
-            echo "ERROR: Source ZIP not found"
-            ls -lah
-            exit 1
-          fi
-
-          mkdir -p source
-          unzip -q -o "$ZIP" -d source
-
-          test -f source/package.json
-          test -f source/pnpm-workspace.yaml
-          test -f source/artifacts/makhzani-pos/package.json
+          test -f v86-source/package.json
+          test -f v86-source/pnpm-workspace.yaml
+          test -f v86-source/artifacts/makhzani-pos/package.json
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -57,11 +45,11 @@ jobs:
           java-version: '17'
 
       - name: Install dependencies
-        working-directory: source
+        working-directory: v86-source
         run: pnpm install --no-frozen-lockfile
 
       - name: Generate Android project
-        working-directory: source/artifacts/makhzani-pos
+        working-directory: v86-source/artifacts/makhzani-pos
         env:
           CI: '1'
         run: pnpm exec expo prebuild --platform android --no-install
@@ -96,7 +84,7 @@ jobs:
       - name: Verify APK
         shell: bash
         run: |
-          APK="source/artifacts/makhzani-pos/android/app/build/outputs/apk/release/app-release.apk"
+          APK="v86-v86-source/artifacts/makhzani-pos/android/app/build/outputs/apk/release/app-release.apk"
 
           if [ ! -s "$APK" ]; then
             echo "ERROR: APK was not generated"
