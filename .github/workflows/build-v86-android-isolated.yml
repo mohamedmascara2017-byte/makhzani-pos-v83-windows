@@ -44,7 +44,7 @@ jobs:
         working-directory: source/v86-source/artifacts/makhzani-pos
         env:
           CI: '1'
-        run: pnpm exec expo prebuild --platform android --clean
+        run: pnpm exec expo prebuild --platform android --clean --no-install
 
       - name: Build installable debug APK
         working-directory: source/v86-source/artifacts/makhzani-pos/android
