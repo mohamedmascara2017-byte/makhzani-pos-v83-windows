@@ -305,6 +305,8 @@ function withAudit(data: StoreData, action: string, details: string): AuditEntry
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<StoreData>(emptyData);
   const [ready, setReady] = useState(false);
+  // If local storage cannot be read, never allow an empty state to overwrite it.
+  const [hydrationFailed, setHydrationFailed] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -344,7 +346,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         }
       })
       .catch(() => {
-        if (mounted) setData(emptyData());
+        if (mounted) setHydrationFailed(true);
       })
       .finally(() => {
         if (mounted) setReady(true);
@@ -355,7 +357,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || hydrationFailed) return;
     const serialized = JSON.stringify(data);
     AsyncStorage.setItem(STORAGE_KEY, serialized).catch(() => undefined);
 
@@ -370,7 +372,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       };
       window.makhzaniDesktop.writeBackup(backup).catch(() => undefined);
     }
-  }, [data, ready]);
+  }, [data, ready, hydrationFailed]);
 
   const currentUser = data.employees.find((employee) => employee.id === data.sessionUserId && employee.active) ?? null;
 
