@@ -1,0 +1,59 @@
+name: Build Makhzani V8.6 AutoSync Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-v86-android-isolated.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout isolated V8.6 source
+        uses: actions/checkout@v4
+        with:
+          ref: makhzani-v86-source-work
+          path: source
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.8.1 --activate
+          pnpm --version
+
+      - name: Install workspace dependencies
+        working-directory: source/v86-source
+        run: pnpm install --no-frozen-lockfile --config.dangerouslyAllowAllBuilds=true
+
+      - name: Generate Android project
+        working-directory: source/v86-source/artifacts/makhzani-pos
+        env:
+          CI: '1'
+        run: pnpm exec expo prebuild --platform android --clean
+
+      - name: Build installable debug APK
+        working-directory: source/v86-source/artifacts/makhzani-pos/android
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Makhzani-POS-V8.6-AutoSync-Android-APK
+          path: source/v86-source/artifacts/makhzani-pos/android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 14
