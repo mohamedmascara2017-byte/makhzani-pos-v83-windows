@@ -31,7 +31,7 @@ export default function CloudSyncAgent() {
     let active = true;
 
     const syncOnce = async () => {
-      if (!active || busy.current || AppState.currentState !== 'active' || !latestStore.current.ready) return;
+      if (!active || busy.current || AppState.currentState !== 'active' || !latestStore.current.ready || !latestStore.current.currentUser) return;
       busy.current = true;
       try {
         if (!(await currentCloudEmail())) return;
