@@ -7,7 +7,7 @@ import { AppPage, Card, PageHeader } from '@/components/common';
 import { useStore } from '@/components/StoreContext';
 import { useColors } from '@/hooks/useColors';
 import { currentCloudEmail, fetchCloudSnapshot, getLinkedStore, saveCloudSnapshot, signIn, signOut } from '@/lib/supabaseSync';
-import { saveSyncBaseline, SYNC_CONFLICT_PREFIX } from '@/lib/autoSync';
+import { hasBusinessData, isCompleteCloudPayload, saveSyncBaseline, SYNC_CONFLICT_PREFIX } from '@/lib/autoSync';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const PRE_RESTORE_BACKUP_KEY = 'makhzani-pos:pre-cloud-restore-backup:v1';
@@ -41,6 +41,7 @@ export default function SyncScreen() {
   const [revision, setRevision] = useState(0);
   const [cloudUpdatedAt, setCloudUpdatedAt] = useState('');
   const [busy, setBusy] = useState(false);
+  const [conflictData, setConflictData] = useState<any>(null);
 
   const refreshLink = async () => {
     const accountEmail = await currentCloudEmail();
@@ -50,6 +51,8 @@ export default function SyncScreen() {
     setStoreId(linked.storeId);
     setRole(linked.role);
     const snapshot = await fetchCloudSnapshot(linked.storeId);
+    const conflictRaw = await AsyncStorage.getItem(SYNC_CONFLICT_PREFIX + linked.storeId);
+    setConflictData(conflictRaw ? JSON.parse(conflictRaw) : null);
     setRevision(snapshot.revision);
     setCloudUpdatedAt(snapshot.updated_at);
   };
@@ -155,6 +158,47 @@ export default function SyncScreen() {
     } finally { setBusy(false); }
   };
 
+  const resolveConflictWithLocal = async () => {
+    if (!storeId || role !== 'owner') return;
+    setBusy(true);
+    try {
+      const raw = await AsyncStorage.getItem(SYNC_CONFLICT_PREFIX + storeId);
+      if (!raw) throw new Error('لم يعد هناك تعارض محفوظ.');
+      const conflict = JSON.parse(raw);
+      const local = localPayload();
+      const nextRevision = await saveCloudSnapshot(storeId, local, Number(conflict.cloudRevision));
+      await saveSyncBaseline(storeId, nextRevision, local);
+      await AsyncStorage.removeItem(SYNC_CONFLICT_PREFIX + storeId);
+      setConflictData(null); setRevision(nextRevision);
+      tell('تم حل التعارض', 'اعتمدنا بيانات هذا الجهاز ورفعناها إلى السحابة.');
+    } catch (error) { tell('لم يُحل التعارض', error instanceof Error ? error.message : 'تعذر اعتماد بيانات هذا الجهاز.'); }
+    finally { setBusy(false); }
+  };
+
+  const resolveConflictWithCloud = async () => {
+    if (!storeId) return;
+    setBusy(true);
+    try {
+      const raw = await AsyncStorage.getItem(SYNC_CONFLICT_PREFIX + storeId);
+      if (!raw) throw new Error('لم يعد هناك تعارض محفوظ.');
+      const conflict = JSON.parse(raw); const cloud = conflict.cloudPayload;
+      if (!isCompleteCloudPayload(cloud)) throw new Error('النسخة السحابية غير مكتملة؛ لم نغيّر بيانات الجهاز.');
+      const local = localPayload();
+      if (!hasBusinessData(cloud) && hasBusinessData(local)) throw new Error('السحابة فارغة والجهاز يحتوي على بيانات؛ رفضنا الاستبدال حمايةً لبياناتك.');
+      const safety = { format: 'makhzani-pos-backup-v1', app: 'Makhzani POS conflict-resolution safety copy', exportedAt: new Date().toISOString(), products: store.products, employees: store.employees, sales: store.sales, purchases: store.purchases, returns: store.returns, counts: store.counts, audit: store.audit, expenses: store.expenses, quickShortcutIds: store.quickShortcutIds, quickShortcutKeys: store.quickShortcutKeys };
+      const safetyKey = 'makhzani-pos:conflict-safety:v1:' + storeId; const safetyText = JSON.stringify(safety);
+      await AsyncStorage.setItem(safetyKey, safetyText);
+      if (await AsyncStorage.getItem(safetyKey) !== safetyText) throw new Error('تعذر التحقق من نسخة الأمان؛ ألغينا الاستبدال.');
+      const pins = new Map(store.employees.map((employee) => [employee.id, employee.pin]));
+      const employees = (cloud.employees as Array<Record<string, unknown>>).map((employee) => ({ ...employee, pin: pins.get(String(employee.id)) ?? '' }));
+      await store.restoreBackup({ ...cloud, employees });
+      await saveSyncBaseline(storeId, Number(conflict.cloudRevision), cloud);
+      await AsyncStorage.removeItem(SYNC_CONFLICT_PREFIX + storeId);
+      setConflictData(null); setRevision(Number(conflict.cloudRevision));
+      tell('تم حل التعارض', 'اعتمدنا النسخة السحابية بعد حفظ نسخة أمان محلية على هذا الجهاز.');
+    } catch (error) { tell('لم يُحل التعارض', error instanceof Error ? error.message : 'تعذر اعتماد النسخة السحابية.'); }
+    finally { setBusy(false); }
+  };
   const disconnect = async () => {
     setBusy(true);
     try { await signOut(); setConnectedEmail(null); setStoreId(''); setRole(''); setRevision(0); }
@@ -184,6 +228,14 @@ export default function SyncScreen() {
           </>
         )}
       </Card>
+
+      {connectedEmail && conflictData ? <Card style={styles.note}>
+        <Text style={[styles.noteTitle, { color: colors.foreground }]}>تعارض بين الجهاز والسحابة</Text>
+        <Text style={[styles.info, { color: colors.mutedForeground }]}>تم تعديل البيانات على الجهاز وعلى جهاز آخر منذ آخر مزامنة. لم ندمج المبيعات أو المخزون تلقائياً حتى لا تتكرر الكميات أو الأرباح. اختر النسخة التي تريد اعتمادها.</Text>
+        <Text style={[styles.small, { color: colors.mutedForeground }]}>مراجعة السحابة عند اكتشاف التعارض: {conflictData.cloudRevision}</Text>
+        {role === 'owner' ? <Pressable disabled={busy} onPress={resolveConflictWithLocal} style={[styles.primaryButton, { backgroundColor: colors.primary }]}><Text style={styles.primaryText}>اعتماد بيانات هذا الجهاز</Text></Pressable> : null}
+        <Pressable disabled={busy} onPress={resolveConflictWithCloud} style={[styles.secondaryButton, { borderColor: colors.border }]}><Text style={[styles.secondaryText, { color: colors.foreground }]}>اعتماد النسخة السحابية</Text></Pressable>
+      </Card> : null}
 
       {connectedEmail ? <Card style={styles.card}>
         <View style={styles.heading}><Feather name="refresh-cw" size={20} color={colors.primary} /><Text style={[styles.cardTitle, { color: colors.foreground }]}>نقل البيانات يدوياً</Text></View>
