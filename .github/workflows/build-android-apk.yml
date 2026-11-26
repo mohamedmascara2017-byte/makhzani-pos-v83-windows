@@ -55,11 +55,11 @@ jobs:
         run: pnpm exec expo prebuild --platform android --no-install
 
       - name: Update dependencies after prebuild
-        working-directory: source
+        working-directory: v86-source
         run: pnpm install --no-frozen-lockfile
 
       - name: Generate Android JavaScript bundle
-        working-directory: source/artifacts/makhzani-pos
+        working-directory: v86-source/artifacts/makhzani-pos
         env:
           CI: '1'
         run: |
@@ -76,7 +76,7 @@ jobs:
           test -s android/app/src/main/assets/index.android.bundle
 
       - name: Build Release APK
-        working-directory: source/artifacts/makhzani-pos/android
+        working-directory: v86-source/artifacts/makhzani-pos/android
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon clean assembleRelease
@@ -84,7 +84,7 @@ jobs:
       - name: Verify APK
         shell: bash
         run: |
-          APK="v86-v86-source/artifacts/makhzani-pos/android/app/build/outputs/apk/release/app-release.apk"
+          APK="v86-source/artifacts/makhzani-pos/android/app/build/outputs/apk/release/app-release.apk"
 
           if [ ! -s "$APK" ]; then
             echo "ERROR: APK was not generated"
@@ -100,6 +100,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Makhzani-POS-V8.7-Standalone-APK
-          path: source/artifacts/makhzani-pos/android/app/build/outputs/apk/release/app-release.apk
+          path: v86-source/artifacts/makhzani-pos/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
