@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "مخزني POS",
+    "slug": "makhzani-pos",
+    "version": "8.6.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "makhzani-pos",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "com.makhzani.pos"
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png",
+      "output": "static"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sharing",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "السماح لمخزني POS باستخدام الكاميرا لمسح باركود المنتجات.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

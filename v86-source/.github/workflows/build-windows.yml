@@ -1,0 +1,57 @@
+name: Build Makhzani POS V8.6 for Windows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Download project files
+        uses: actions/checkout@v4
+
+      - name: Verify project structure
+        shell: pwsh
+        run: |
+          if (!(Test-Path "package.json")) {
+            Write-Host "ERROR: package.json is missing from the repository root."
+            Write-Host "Upload the CONTENTS of the V8.6 ZIP, not only the workflow file or the ZIP itself."
+            Get-ChildItem -Force | Select-Object Name, Mode
+            exit 1
+          }
+          if (!(Test-Path "pnpm-workspace.yaml")) {
+            throw "pnpm-workspace.yaml is missing from the repository root."
+          }
+          if (!(Test-Path "artifacts/makhzani-pos/package.json")) {
+            throw "artifacts/makhzani-pos/package.json is missing."
+          }
+          Write-Host "Project structure is correct."
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm
+        shell: pwsh
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.8.1 --activate
+          pnpm --version
+
+      - name: Install dependencies
+        shell: pwsh
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build Windows installer
+        shell: pwsh
+        run: pnpm --filter @workspace/makhzani-pos run desktop:dist
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Makhzani-POS-V8.6-Windows-Installer
+          path: artifacts/makhzani-pos/release/*.exe
+          if-no-files-found: error
+          retention-days: 14

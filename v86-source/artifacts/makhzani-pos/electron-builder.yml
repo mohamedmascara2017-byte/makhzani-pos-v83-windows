@@ -1,0 +1,22 @@
+appId: com.makhzani.pos.desktop
+productName: Makhzani POS
+directories:
+  output: release
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+asar: true
+extraMetadata:
+  main: electron/main.cjs
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Makhzani POS

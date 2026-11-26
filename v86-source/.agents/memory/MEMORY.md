@@ -1,0 +1,1 @@
+- [Expo auth redirects](expo-auth-redirects.md) — mount the root navigator before redirecting after local session restore to avoid blank startup previews.

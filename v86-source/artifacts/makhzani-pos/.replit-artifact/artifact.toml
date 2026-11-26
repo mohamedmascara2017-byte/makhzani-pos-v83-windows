@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/makhzani-pos/"
+title = "مخزني POS"
+description = "A native mobile point-of-sale and inventory app for neighborhood general stores, with Arabic RTL support, cashier checkout, product stock management, purchases, returns, inventory counts, and employee access."
+version = "1.0.0"
+id = "artifacts/makhzani-pos"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/makhzani-pos/" ]
+localPort = 23446
+
+[services.development]
+run = "pnpm --filter @workspace/makhzani-pos run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/makhzani-pos", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/makhzani-pos", "run", "serve" ]
+
+[services.env]
+PORT = "23446"
+BASE_PATH = "/makhzani-pos/"

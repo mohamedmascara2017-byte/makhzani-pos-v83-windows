@@ -1,0 +1,4 @@
+Windows build preparation
+- Restored win32-x64 optional native packages for esbuild, Tailwind Oxide, Rollup and Expo ngrok by removing their exclusion overrides.
+- Retained supportedArchitectures entries for win32 and x64.
+- Source features are described in Makhzani_POS_V8_3_Update_Notes_AR.md.
