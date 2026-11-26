@@ -45,33 +45,37 @@ export default function CloudSyncAgent() {
         if (!baselineRaw) return; // First connection must be bootstrapped by the owner from the sync screen.
         const baseline = JSON.parse(baselineRaw) as { revision: number; payload: unknown };
         const local = cloudPayloadFromStore(latestStore.current);
+        const pendingRaw = await AsyncStorage.getItem(queueKey);
+        const pending = pendingRaw ? JSON.parse(pendingRaw) as { payload?: unknown } : null;
         const localChanged = !same(local, baseline.payload);
+        const effectiveLocal = localChanged ? local : (pending?.payload ?? local);
+        const effectiveChanged = localChanged || !!pending?.payload;
         const snapshot = await fetchCloudSnapshot(linked.storeId);
         const cloud = snapshot.payload;
 
         if (snapshot.revision === baseline.revision) {
-          if (!localChanged) {
+          if (!effectiveChanged) {
             await AsyncStorage.removeItem(queueKey);
             return;
           }
           if (linked.role !== 'owner') return;
-          const queued = { payload: local, expectedRevision: baseline.revision, queuedAt: new Date().toISOString() };
+          const queued = { payload: effectiveLocal, expectedRevision: baseline.revision, queuedAt: new Date().toISOString() };
           await AsyncStorage.setItem(queueKey, JSON.stringify(queued));
-          const newRevision = await saveCloudSnapshot(linked.storeId, local, baseline.revision);
-          await saveSyncBaseline(linked.storeId, newRevision, local);
+          const newRevision = await saveCloudSnapshot(linked.storeId, effectiveLocal, baseline.revision);
+          await saveSyncBaseline(linked.storeId, newRevision, effectiveLocal);
           await AsyncStorage.removeItem(queueKey);
           return;
         }
 
-        if (localChanged && same(local, cloud)) {
+        if (effectiveChanged && same(effectiveLocal, cloud)) {
           await saveSyncBaseline(linked.storeId, snapshot.revision, cloud);
           await AsyncStorage.removeItem(queueKey);
           return;
         }
 
-        if (!localChanged) {
+        if (!effectiveChanged) {
           if (!isCompleteCloudPayload(cloud)) return;
-          if (!hasBusinessData(cloud) && hasBusinessData(local)) return;
+          if (!hasBusinessData(cloud) && hasBusinessData(effectiveLocal)) return;
           const current = latestStore.current;
           const safety = {
             format: 'makhzani-pos-backup-v1',
@@ -106,7 +110,7 @@ export default function CloudSyncAgent() {
           detectedAt: new Date().toISOString(),
           baseRevision: baseline.revision,
           cloudRevision: snapshot.revision,
-          localPayload: local,
+          localPayload: effectiveLocal,
           cloudPayload: cloud,
         }));
       } catch {
