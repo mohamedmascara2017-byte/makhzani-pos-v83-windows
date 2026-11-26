@@ -2,6 +2,9 @@ name: Build Makhzani V8.6 Windows installer (isolated source)
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/build-v86-windows-isolated.yml'
 
 permissions:
   contents: read
