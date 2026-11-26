@@ -13,20 +13,30 @@ jobs:
         shell: bash
         run: |
           set -e
-          ZIP="Makhzani_POS_V8_6_Shortcuts_Empty_Update.zip"
-          if [ ! -f "$ZIP" ]; then
-            echo "ARCHIVE_NOT_FOUND=$ZIP"
-            echo "Available ZIP files:"
-            find . -maxdepth 2 -iname '*.zip' -print
-            exit 1
-          fi
-          echo "ARCHIVE=$ZIP"
-          unzip -l "$ZIP" | head -200
           mkdir -p inspect
-          unzip -q "$ZIP" -d inspect
-          echo "PACKAGE_JSON_FILES:"
-          find inspect -name package.json -not -path '*/node_modules/*' -print
-          echo "TOP_LEVEL_FILES:"
-          find inspect -maxdepth 3 -type f | head -120
-          echo "PROJECT_MARKERS:"
-          grep -RIl --exclude-dir=node_modules -E 'Makhzani|مخزني|makhzani' inspect 2>/dev/null | head -60 || true
+          {
+            ZIP="Makhzani_POS_V8_6_Shortcuts_Empty_Update.zip"
+            if [ ! -f "$ZIP" ]; then
+              echo "ARCHIVE_NOT_FOUND=$ZIP"
+              echo "Available ZIP files:"
+              find . -maxdepth 2 -iname '*.zip' -print
+              exit 1
+            fi
+            echo "ARCHIVE=$ZIP"
+            echo "=== ARCHIVE CONTENTS ==="
+            unzip -l "$ZIP" | head -200
+            unzip -q "$ZIP" -d inspect
+            echo "=== PACKAGE_JSON_FILES ==="
+            find inspect -name package.json -not -path '*/node_modules/*' -print
+            echo "=== TOP_LEVEL_FILES ==="
+            find inspect -maxdepth 3 -type f | head -120
+            echo "=== PROJECT_MARKERS ==="
+            grep -RIl --exclude-dir=node_modules -E 'Makhzani|مخزني|makhzani' inspect 2>/dev/null | head -60 || true
+          } 2>&1 | tee inspection-report.txt
+      - name: Upload inspection report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: v86-shortcuts-inspection-report
+          path: inspection-report.txt
+          if-no-files-found: warn
