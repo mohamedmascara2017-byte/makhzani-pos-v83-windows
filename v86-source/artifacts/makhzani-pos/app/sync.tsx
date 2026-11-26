@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -8,15 +7,7 @@ import { useStore } from '@/components/StoreContext';
 import { useColors } from '@/hooks/useColors';
 import { currentCloudEmail, fetchCloudSnapshot, getLinkedStore, saveCloudSnapshot, signIn, signOut } from '@/lib/supabaseSync';
 import { hasBusinessData, isCompleteCloudPayload, saveSyncBaseline, SYNC_CONFLICT_PREFIX } from '@/lib/autoSync';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
 const PRE_RESTORE_BACKUP_KEY = 'makhzani-pos:pre-cloud-restore-backup:v1';
-
-function hasBusinessData(payload: Record<string, unknown>): boolean {
-  return ['products', 'sales', 'purchases', 'returns', 'counts', 'expenses'].some((key) =>
-    Array.isArray(payload[key]) && (payload[key] as unknown[]).length > 0,
-  );
-}
 
 function isCompleteBackup(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object') return false;
