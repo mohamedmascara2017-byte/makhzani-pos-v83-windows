@@ -6,7 +6,7 @@ import { AppPage, Card, PageHeader } from '@/components/common';
 import { useStore } from '@/components/StoreContext';
 import { useColors } from '@/hooks/useColors';
 import { currentCloudEmail, fetchCloudSnapshot, getLinkedStore, saveCloudSnapshot, signIn, signOut } from '@/lib/supabaseSync';
-import { hasBusinessData, isCompleteCloudPayload, saveSyncBaseline, SYNC_CONFLICT_PREFIX } from '@/lib/autoSync';
+import { hasBusinessData, isCompleteCloudPayload, saveSyncBaseline, SYNC_CONFLICT_PREFIX, SYNC_QUEUE_PREFIX } from '@/lib/autoSync';
 const PRE_RESTORE_BACKUP_KEY = 'makhzani-pos:pre-cloud-restore-backup:v1';
 
 function isCompleteBackup(value: unknown): value is Record<string, unknown> {
@@ -96,6 +96,7 @@ export default function SyncScreen() {
       const nextRevision = await saveCloudSnapshot(storeId, local, latest.revision);
       await saveSyncBaseline(storeId, nextRevision, local);
       await AsyncStorage.removeItem(SYNC_CONFLICT_PREFIX + storeId);
+      await AsyncStorage.removeItem(SYNC_QUEUE_PREFIX + storeId);
       setRevision(nextRevision);
       const latestAfter = await fetchCloudSnapshot(storeId);
       setCloudUpdatedAt(latestAfter.updated_at);
@@ -141,6 +142,7 @@ export default function SyncScreen() {
       await store.restoreBackup({ ...cloud, employees });
       await saveSyncBaseline(storeId, snapshot.revision, cloud);
       await AsyncStorage.removeItem(SYNC_CONFLICT_PREFIX + storeId);
+      await AsyncStorage.removeItem(SYNC_QUEUE_PREFIX + storeId);
       setRevision(snapshot.revision);
       setCloudUpdatedAt(snapshot.updated_at);
       tell('تم التنزيل', 'تم استيراد بيانات المتجر بعد حفظ نسخة أمان محلية تلقائياً. أرقام PIN الموجودة على هذا الجهاز حُفظت محلياً، ولا تُنقل بين الأجهزة.');
@@ -160,6 +162,7 @@ export default function SyncScreen() {
       const nextRevision = await saveCloudSnapshot(storeId, local, Number(conflict.cloudRevision));
       await saveSyncBaseline(storeId, nextRevision, local);
       await AsyncStorage.removeItem(SYNC_CONFLICT_PREFIX + storeId);
+      await AsyncStorage.removeItem(SYNC_QUEUE_PREFIX + storeId);
       setConflictData(null); setRevision(nextRevision);
       tell('تم حل التعارض', 'اعتمدنا بيانات هذا الجهاز ورفعناها إلى السحابة.');
     } catch (error) { tell('لم يُحل التعارض', error instanceof Error ? error.message : 'تعذر اعتماد بيانات هذا الجهاز.'); }
@@ -188,6 +191,7 @@ export default function SyncScreen() {
       await store.restoreBackup({ ...cloud, employees });
       await saveSyncBaseline(storeId, latestCloud.revision, cloud);
       await AsyncStorage.removeItem(SYNC_CONFLICT_PREFIX + storeId);
+      await AsyncStorage.removeItem(SYNC_QUEUE_PREFIX + storeId);
       setConflictData(null); setRevision(latestCloud.revision);
       tell('تم حل التعارض', 'اعتمدنا النسخة السحابية بعد حفظ نسخة أمان محلية على هذا الجهاز.');
     } catch (error) { tell('لم يُحل التعارض', error instanceof Error ? error.message : 'تعذر اعتماد النسخة السحابية.'); }
