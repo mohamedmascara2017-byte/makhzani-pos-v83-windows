@@ -63,6 +63,12 @@ export default function CloudSyncAgent() {
           return;
         }
 
+        if (localChanged && same(local, cloud)) {
+          await saveSyncBaseline(linked.storeId, snapshot.revision, cloud);
+          await AsyncStorage.removeItem(queueKey);
+          return;
+        }
+
         if (!localChanged) {
           if (!isCompleteCloudPayload(cloud)) return;
           if (!hasBusinessData(cloud) && hasBusinessData(local)) return;
