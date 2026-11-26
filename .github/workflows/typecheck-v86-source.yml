@@ -1,0 +1,36 @@
+name: Check Makhzani V8.6 source
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout isolated V8.6 work branch
+        uses: actions/checkout@v4
+        with:
+          ref: makhzani-v86-source-work
+          path: source
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.8.1 --activate
+          pnpm --version
+
+      - name: Install workspace dependencies
+        working-directory: source/v86-source
+        run: pnpm install --no-frozen-lockfile
+
+      - name: TypeScript check Makhzani POS
+        working-directory: source/v86-source
+        run: pnpm --filter @workspace/makhzani-pos run typecheck
