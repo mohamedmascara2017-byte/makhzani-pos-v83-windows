@@ -181,7 +181,10 @@ export default function SyncScreen() {
     try {
       const raw = await AsyncStorage.getItem(SYNC_CONFLICT_PREFIX + storeId);
       if (!raw) throw new Error('لم يعد هناك تعارض محفوظ.');
-      const conflict = JSON.parse(raw); const cloud = conflict.cloudPayload;
+      const conflict = JSON.parse(raw);
+      const latestCloud = await fetchCloudSnapshot(storeId);
+      if (latestCloud.revision !== Number(conflict.cloudRevision)) throw new Error('تغيرت السحابة مرة أخرى بعد اكتشاف التعارض. حدّث الشاشة لمراجعة التعارض الجديد قبل الاختيار.');
+      const cloud = latestCloud.payload;
       if (!isCompleteCloudPayload(cloud)) throw new Error('النسخة السحابية غير مكتملة؛ لم نغيّر بيانات الجهاز.');
       const local = localPayload();
       if (!hasBusinessData(cloud) && hasBusinessData(local)) throw new Error('السحابة فارغة والجهاز يحتوي على بيانات؛ رفضنا الاستبدال حمايةً لبياناتك.');
@@ -192,9 +195,9 @@ export default function SyncScreen() {
       const pins = new Map(store.employees.map((employee) => [employee.id, employee.pin]));
       const employees = (cloud.employees as Array<Record<string, unknown>>).map((employee) => ({ ...employee, pin: pins.get(String(employee.id)) ?? '' }));
       await store.restoreBackup({ ...cloud, employees });
-      await saveSyncBaseline(storeId, Number(conflict.cloudRevision), cloud);
+      await saveSyncBaseline(storeId, latestCloud.revision, cloud);
       await AsyncStorage.removeItem(SYNC_CONFLICT_PREFIX + storeId);
-      setConflictData(null); setRevision(Number(conflict.cloudRevision));
+      setConflictData(null); setRevision(latestCloud.revision);
       tell('تم حل التعارض', 'اعتمدنا النسخة السحابية بعد حفظ نسخة أمان محلية على هذا الجهاز.');
     } catch (error) { tell('لم يُحل التعارض', error instanceof Error ? error.message : 'تعذر اعتماد النسخة السحابية.'); }
     finally { setBusy(false); }
