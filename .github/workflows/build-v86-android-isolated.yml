@@ -46,14 +46,14 @@ jobs:
           CI: '1'
         run: pnpm exec expo prebuild --platform android --clean --no-install
 
-      - name: Build installable debug APK
+      - name: Build installable release APK
         working-directory: source/v86-source/artifacts/makhzani-pos/android
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleRelease
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Makhzani-POS-V8.6-AutoSync-Android-APK
-          path: source/v86-source/artifacts/makhzani-pos/android/app/build/outputs/apk/debug/app-debug.apk
+          path: source/v86-source/artifacts/makhzani-pos/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
