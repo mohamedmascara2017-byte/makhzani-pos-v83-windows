@@ -23,7 +23,7 @@ export function cloudPayloadFromStore(store: any) {
   };
 }
 
-export function isCompleteCloudPayload(value: any): boolean {
+export function isCompleteCloudPayload(value: unknown): value is Record<string, any> {
   return !!value && typeof value === 'object' &&
     value.format === 'makhzani-pos-backup-v1' &&
     ['products', 'employees', 'sales', 'purchases', 'returns', 'counts', 'audit', 'expenses']
