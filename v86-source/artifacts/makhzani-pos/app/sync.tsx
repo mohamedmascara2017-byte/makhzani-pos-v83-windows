@@ -7,6 +7,8 @@ import { AppPage, Card, PageHeader } from '@/components/common';
 import { useStore } from '@/components/StoreContext';
 import { useColors } from '@/hooks/useColors';
 import { currentCloudEmail, fetchCloudSnapshot, getLinkedStore, saveCloudSnapshot, signIn, signOut } from '@/lib/supabaseSync';
+import { saveSyncBaseline, SYNC_CONFLICT_PREFIX } from '@/lib/autoSync';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const PRE_RESTORE_BACKUP_KEY = 'makhzani-pos:pre-cloud-restore-backup:v1';
 
@@ -98,6 +100,8 @@ export default function SyncScreen() {
         throw new Error('توقّف الرفع لحماية بيانات المتجر: هذا الجهاز لا يحتوي على بيانات، بينما السحابة تحتوي على بيانات. لن نستبدل النسخة السحابية الفعلية بنسخة فارغة.');
       }
       const nextRevision = await saveCloudSnapshot(storeId, local, latest.revision);
+      await saveSyncBaseline(storeId, nextRevision, local);
+      await AsyncStorage.removeItem(SYNC_CONFLICT_PREFIX + storeId);
       setRevision(nextRevision);
       const latestAfter = await fetchCloudSnapshot(storeId);
       setCloudUpdatedAt(latestAfter.updated_at);
@@ -141,6 +145,8 @@ export default function SyncScreen() {
         pin: localPins.get(String(employee.id)) ?? '',
       }));
       await store.restoreBackup({ ...cloud, employees });
+      await saveSyncBaseline(storeId, snapshot.revision, cloud);
+      await AsyncStorage.removeItem(SYNC_CONFLICT_PREFIX + storeId);
       setRevision(snapshot.revision);
       setCloudUpdatedAt(snapshot.updated_at);
       tell('تم التنزيل', 'تم استيراد بيانات المتجر بعد حفظ نسخة أمان محلية تلقائياً. أرقام PIN الموجودة على هذا الجهاز حُفظت محلياً، ولا تُنقل بين الأجهزة.');
