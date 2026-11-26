@@ -3,6 +3,9 @@
 name: Makhzani POS V8.7 - Android Release
 
 on:
+  push:
+    branches:
+      - makhzani-v86-source-work
   workflow_dispatch:
 
 permissions:
