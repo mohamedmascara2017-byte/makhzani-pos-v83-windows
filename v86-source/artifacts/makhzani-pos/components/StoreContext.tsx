@@ -761,7 +761,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ? Object.fromEntries(Object.entries(candidate.quickShortcutKeys).map(([id, key]) => [String(id), String(key).toUpperCase()]))
         : {},
     };
-    restored.quickShortcutIds = restored.quickShortcutIds?.filter((id) => restored.products.some((product) => product.id === id));
+    restored.quickShortcutIds = (restored.quickShortcutIds ?? []).filter((id) => restored.products.some((product) => product.id === id));
     const audit = withAudit(restored, 'استعادة نسخة احتياطية', `${restored.products.length} منتج`);
     const nextData = { ...restored, audit: [audit, ...restored.audit] };
     // Persist before reporting success so the restored data survives an app restart.
