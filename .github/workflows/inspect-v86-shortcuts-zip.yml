@@ -1,0 +1,32 @@
+name: Inspect V8.6 shortcuts archive
+on:
+  workflow_dispatch:
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source branch
+        uses: actions/checkout@v4
+        with:
+          ref: makhzani-v86-update
+      - name: Inspect archive without extracting into project
+        shell: bash
+        run: |
+          set -e
+          ZIP="Makhzani_POS_V8_6_Shortcuts_Empty_Update.zip"
+          if [ ! -f "$ZIP" ]; then
+            echo "ARCHIVE_NOT_FOUND=$ZIP"
+            echo "Available ZIP files:"
+            find . -maxdepth 2 -iname '*.zip' -print
+            exit 1
+          fi
+          echo "ARCHIVE=$ZIP"
+          unzip -l "$ZIP" | head -200
+          mkdir -p inspect
+          unzip -q "$ZIP" -d inspect
+          echo "PACKAGE_JSON_FILES:"
+          find inspect -name package.json -not -path '*/node_modules/*' -print
+          echo "TOP_LEVEL_FILES:"
+          find inspect -maxdepth 3 -type f | head -120
+          echo "PROJECT_MARKERS:"
+          grep -RIl --exclude-dir=node_modules -E 'Makhzani|مخزني|makhzani' inspect 2>/dev/null | head -60 || true
