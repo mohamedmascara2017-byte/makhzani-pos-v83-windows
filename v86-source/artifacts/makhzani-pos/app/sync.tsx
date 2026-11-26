@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, Alert, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
@@ -6,6 +7,21 @@ import { AppPage, Card, PageHeader } from '@/components/common';
 import { useStore } from '@/components/StoreContext';
 import { useColors } from '@/hooks/useColors';
 import { currentCloudEmail, fetchCloudSnapshot, getLinkedStore, saveCloudSnapshot, signIn, signOut } from '@/lib/supabaseSync';
+
+const PRE_RESTORE_BACKUP_KEY = 'makhzani-pos:pre-cloud-restore-backup:v1';
+
+function hasBusinessData(payload: Record<string, unknown>): boolean {
+  return ['products', 'sales', 'purchases', 'returns', 'counts', 'expenses'].some((key) =>
+    Array.isArray(payload[key]) && (payload[key] as unknown[]).length > 0,
+  );
+}
+
+function isCompleteBackup(value: unknown): value is Record<string, unknown> {
+  if (!value || typeof value !== 'object') return false;
+  const backup = value as Record<string, unknown>;
+  return backup.format === 'makhzani-pos-backup-v1' &&
+    ['products', 'employees', 'sales', 'purchases', 'returns', 'counts', 'audit', 'expenses'].every((key) => Array.isArray(backup[key]));
+}
 
 function tell(title: string, message: string) {
   if (Platform.OS === 'web') window.alert(`${title}\n\n${message}`);
@@ -76,7 +92,12 @@ export default function SyncScreen() {
     setBusy(true);
     try {
       const latest = await fetchCloudSnapshot(storeId);
-      const nextRevision = await saveCloudSnapshot(storeId, localPayload(), latest.revision);
+      const local = localPayload();
+      const cloudPayload = latest.payload && typeof latest.payload === 'object' ? latest.payload as Record<string, unknown> : {};
+      if (!hasBusinessData(local) && hasBusinessData(cloudPayload)) {
+        throw new Error('توقّف الرفع لحماية بيانات المتجر: هذا الجهاز لا يحتوي على بيانات، بينما السحابة تحتوي على بيانات. لن نستبدل النسخة السحابية الفعلية بنسخة فارغة.');
+      }
+      const nextRevision = await saveCloudSnapshot(storeId, local, latest.revision);
       setRevision(nextRevision);
       const latestAfter = await fetchCloudSnapshot(storeId);
       setCloudUpdatedAt(latestAfter.updated_at);
@@ -96,8 +117,23 @@ export default function SyncScreen() {
     try {
       const snapshot = await fetchCloudSnapshot(storeId);
       const cloud = snapshot.payload as Record<string, unknown>;
-      if (!cloud || cloud.format !== 'makhzani-pos-backup-v1' || !Array.isArray(cloud.products) || !Array.isArray(cloud.employees)) {
-        throw new Error('لا توجد نسخة بيانات صالحة في السحابة. ارفع بيانات الجهاز الرئيسي أولاً.');
+      if (!isCompleteBackup(cloud)) {
+        throw new Error('لا توجد نسخة بيانات كاملة وصالحة في السحابة. لم يتم تغيير بيانات هذا الجهاز.');
+      }
+      if (!hasBusinessData(cloud) && hasBusinessData(localPayload())) {
+        throw new Error('توقّف التنزيل لحماية بيانات هذا الجهاز: النسخة السحابية فارغة بينما هذا الجهاز يحتوي على بيانات. لم يتم استبدال أي شيء.');
+      }
+      const localSafetyBackup = {
+        format: 'makhzani-pos-backup-v1',
+        app: 'Makhzani POS local safety copy before cloud restore',
+        exportedAt: new Date().toISOString(),
+        ...store,
+      };
+      const serializedSafetyBackup = JSON.stringify(localSafetyBackup);
+      await AsyncStorage.setItem(PRE_RESTORE_BACKUP_KEY, serializedSafetyBackup);
+      const verifiedSafetyBackup = await AsyncStorage.getItem(PRE_RESTORE_BACKUP_KEY);
+      if (!verifiedSafetyBackup || verifiedSafetyBackup !== serializedSafetyBackup) {
+        throw new Error('تعذر التحقق من حفظ نسخة الأمان المحلية؛ أُلغي التنزيل ولم تتغير بيانات الجهاز.');
       }
       const localPins = new Map(store.employees.map((employee) => [employee.id, employee.pin]));
       const employees = (cloud.employees as Array<Record<string, unknown>>).map((employee) => ({
@@ -107,7 +143,7 @@ export default function SyncScreen() {
       await store.restoreBackup({ ...cloud, employees });
       setRevision(snapshot.revision);
       setCloudUpdatedAt(snapshot.updated_at);
-      tell('تم التنزيل', 'تم استيراد بيانات المتجر. أرقام PIN الموجودة على هذا الجهاز حُفظت محلياً، ولا تُنقل بين الأجهزة.');
+      tell('تم التنزيل', 'تم استيراد بيانات المتجر بعد حفظ نسخة أمان محلية تلقائياً. أرقام PIN الموجودة على هذا الجهاز حُفظت محلياً، ولا تُنقل بين الأجهزة.');
     } catch (error) {
       tell('تعذر تنزيل البيانات', error instanceof Error ? error.message : 'حدث خطأ أثناء التنزيل.');
     } finally { setBusy(false); }
@@ -151,6 +187,11 @@ export default function SyncScreen() {
         {role !== 'owner' ? <Text style={[styles.small, { color: colors.mutedForeground }]}>رفع البيانات متاح لحساب المالك فقط.</Text> : null}
       </Card> : null}
 
+      <Card style={styles.note}>
+        <Text style={[styles.noteTitle, { color: colors.foreground }]}>حماية البيانات</Text>
+        <Text style={[styles.info, { color: colors.mutedForeground }]}>• قبل تنزيل السحابة، يحفظ التطبيق نسخة أمان محلية ويتحقق من حفظها.</Text>
+        <Text style={[styles.info, { color: colors.mutedForeground }]}>• يمنع التطبيق رفع جهاز فارغ فوق نسخة سحابية تحتوي على بيانات، أو تنزيل سحابة فارغة فوق بيانات الجهاز.</Text>
+      </Card>
       <Card style={styles.note}>
         <Text style={[styles.noteTitle, { color: colors.foreground }]}>ملاحظات مهمة قبل التفعيل الكامل</Text>
         <Text style={[styles.info, { color: colors.mutedForeground }]}>• بيانات التطبيق المحلية لا تُحذف عند تسجيل الدخول.</Text>
