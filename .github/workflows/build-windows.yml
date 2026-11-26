@@ -1,48 +1,41 @@
 
-name: Build Makhzani POS V8.6 for Windows
+name: Build Makhzani POS V8.6 Windows Updated
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract project ZIP
+      - name: Extract updated V8.6 source
         shell: pwsh
         run: |
-          $zip = Get-ChildItem -Path . -Filter "*.zip" -File -Recurse |
-            Where-Object { $_.Name -like "*V8_6*GitHub_Ready*" -or $_.Name -like "*V8_6*CloudSync*" } |
-            Select-Object -First 1
+          $zip = "Makhzani_POS_V8_6_Shortcuts_Empty_Update.zip"
 
-          if (!$zip) {
-            Get-ChildItem -Force
-            throw "Upload the Makhzani V8.6 ZIP file to the repository root."
+          if (!(Test-Path $zip)) {
+            throw "Updated source ZIP not found: $zip"
           }
 
-          $dest = Join-Path $env:RUNNER_TEMP "makhzani-source"
-          New-Item -ItemType Directory -Force -Path $dest | Out-Null
-          Expand-Archive -Path $zip.FullName -DestinationPath $dest -Force
+          Expand-Archive -Path $zip -DestinationPath "$env:RUNNER_TEMP/makhzani-source" -Force
 
-          $workspace = Get-ChildItem $dest -Filter "pnpm-workspace.yaml" -Recurse -File |
-            Where-Object {
-              (Test-Path (Join-Path $_.DirectoryName "package.json")) -and
-              (Test-Path (Join-Path $_.DirectoryName "artifacts/makhzani-pos/package.json"))
-            } |
-            Select-Object -First 1
+          Copy-Item "$env:RUNNER_TEMP/makhzani-source/*" "." -Recurse -Force
 
-          if (!$workspace) {
-            Get-ChildItem $dest -Recurse -File |
-              Select-Object -First 50 -ExpandProperty FullName
-            throw "Project files not found inside ZIP."
+          if (!(Test-Path "package.json")) {
+            throw "package.json missing after extraction"
           }
 
-          "PROJECT_DIR=$($workspace.DirectoryName)" |
-            Out-File -FilePath $env:GITHUB_ENV -Append
+          if (!(Test-Path "pnpm-workspace.yaml")) {
+            throw "pnpm-workspace.yaml missing"
+          }
+
+          if (!(Test-Path "artifacts/makhzani-pos/package.json")) {
+            throw "POS application package.json missing"
+          }
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -54,19 +47,33 @@ jobs:
         run: |
           corepack enable
           corepack prepare pnpm@10.8.1 --activate
+          pnpm --version
 
       - name: Install dependencies
-        working-directory: ${{ env.PROJECT_DIR }}
+        shell: pwsh
         run: pnpm install --no-frozen-lockfile
 
-      - name: Build Windows
-        working-directory: ${{ env.PROJECT_DIR }}
+      - name: Build Windows installer
+        shell: pwsh
         run: pnpm --filter @workspace/makhzani-pos run desktop:dist
 
-      - name: Upload EXE
+      - name: Verify installer
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem "artifacts/makhzani-pos/release" -Filter "*.exe" -ErrorAction SilentlyContinue
+
+          if (!$files -or $files.Count -eq 0) {
+            throw "Windows installer was not generated"
+          }
+
+          $files | ForEach-Object {
+            Write-Host "Installer found: $($_.FullName)"
+          }
+
+      - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: Makhzani-POS-V8.6-Windows
-          path: ${{ env.PROJECT_DIR }}/artifacts/makhzani-pos/release/*.exe
+          name: Makhzani-POS-V8.6-Updated-Windows
+          path: artifacts/makhzani-pos/release/*.exe
           if-no-files-found: error
-
+          retention-days: 14
