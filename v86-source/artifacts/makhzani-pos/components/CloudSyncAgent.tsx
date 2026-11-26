@@ -14,7 +14,12 @@ import {
 } from '@/lib/autoSync';
 import { currentCloudEmail, fetchCloudSnapshot, getLinkedStore, saveCloudSnapshot } from '@/lib/supabaseSync';
 
-const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+const comparable = (value: any) => {
+  if (!value || typeof value !== 'object') return value;
+  const { exportedAt: _exportedAt, ...stable } = value;
+  return stable;
+};
+const same = (a: unknown, b: unknown) => JSON.stringify(comparable(a)) === JSON.stringify(comparable(b));
 
 export default function CloudSyncAgent() {
   const store = useStore();
