@@ -1,0 +1,68 @@
+name: Extract V8.6 source to work branch
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  extract-source:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout work branch
+        uses: actions/checkout@v4
+        with:
+          ref: makhzani-v86-source-work
+
+      - name: Extract V8.6 archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE="Makhzani_POS_V8_6_GitHub_Ready.zip"
+          if [ ! -f "$ARCHIVE" ]; then
+            echo "Archive not found: $ARCHIVE"
+            find . -maxdepth 2 -type f -name '*.zip' -print
+            exit 1
+          fi
+
+          TMP_DIR="$(mktemp -d)"
+          unzip -q "$ARCHIVE" -d "$TMP_DIR"
+
+          PACKAGE_JSON="$(find "$TMP_DIR" -type f -name package.json -not -path '*/node_modules/*' -print -quit)"
+          if [ -z "$PACKAGE_JSON" ]; then
+            echo "No package.json found in the archive. Archive contents:"
+            find "$TMP_DIR" -maxdepth 4 -type f | head -200
+            exit 1
+          fi
+
+          PROJECT_ROOT="$(dirname "$PACKAGE_JSON")"
+          mkdir -p artifacts/makhzani-pos
+          rsync -a --delete \
+            --exclude='.git/' \
+            --exclude='node_modules/' \
+            --exclude='.env' \
+            --exclude='.env.*' \
+            --exclude='*.pem' \
+            --exclude='*.key' \
+            --exclude='credentials.json' \
+            "$PROJECT_ROOT/" artifacts/makhzani-pos/
+
+          echo "Extracted project root: $PROJECT_ROOT"
+          echo "Files copied: $(find artifacts/makhzani-pos -type f | wc -l)"
+          echo "Top-level files:"
+          ls -la artifacts/makhzani-pos
+
+      - name: Commit extracted source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add artifacts/makhzani-pos
+          if git diff --cached --quiet; then
+            echo "No source changes to commit."
+          else
+            git commit -m "Extract V8.6 source into work branch"
+            git push origin HEAD:makhzani-v86-source-work
+          fi
