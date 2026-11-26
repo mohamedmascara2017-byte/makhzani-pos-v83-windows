@@ -16,6 +16,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StoreProvider } from '@/components/StoreContext';
 import { useStore } from '@/components/StoreContext';
+import CloudSyncAgent from '@/components/CloudSyncAgent';
 
 // Prevent the splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -80,6 +81,7 @@ export default function RootLayout() {
             <KeyboardProvider>
               <StoreProvider>
                 <RootLayoutNav />
+                <CloudSyncAgent />
               </StoreProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>
