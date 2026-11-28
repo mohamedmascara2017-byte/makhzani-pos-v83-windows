@@ -11,7 +11,8 @@
       "supportsTablet": false
     },
     "android": {
-      "package": "com.makhzani.pos"
+      "package": "com.makhzani.pos",
+      "allowBackup": false
     },
     "web": {
       "favicon": "./assets/images/icon.png",
