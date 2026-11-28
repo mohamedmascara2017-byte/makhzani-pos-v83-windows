@@ -6,6 +6,7 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 
@@ -307,6 +308,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   // If local storage cannot be read, never allow an empty state to overwrite it.
   const [hydrationFailed, setHydrationFailed] = useState(false);
+  const saveChain = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     let mounted = true;
@@ -359,7 +361,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!ready || hydrationFailed) return;
     const serialized = JSON.stringify(data);
-    AsyncStorage.setItem(STORAGE_KEY, serialized).catch(() => undefined);
+    // Serialize writes so rapid updates (e.g. checkout/stock) cannot race and overwrite newer state.
+    saveChain.current = saveChain.current
+      .catch(() => undefined)
+      .then(() => AsyncStorage.setItem(STORAGE_KEY, serialized))
+      .catch(() => undefined);
 
     // Windows desktop: when the owner selects a Google Drive for desktop folder,
     // keep a current backup and one dated snapshot per day after each data change.
