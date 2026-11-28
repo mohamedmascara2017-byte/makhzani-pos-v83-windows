@@ -162,6 +162,7 @@ interface StoreValue extends StoreData {
 }
 
 const STORAGE_KEY = 'makhzani-pos:data:v1';
+const STORAGE_BACKUP_KEY = 'makhzani-pos:data:backup:v1';
 const makeId = () => `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 const owner: Employee = {
   id: 'owner-default',
@@ -312,11 +313,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
-    AsyncStorage.getItem(STORAGE_KEY)
-      .then((raw) => {
+    Promise.all([AsyncStorage.getItem(STORAGE_KEY), AsyncStorage.getItem(STORAGE_BACKUP_KEY)])
+      .then(([primaryRaw, backupRaw]) => {
         if (!mounted) return;
-        if (raw) {
-          const saved = JSON.parse(raw) as Partial<StoreData>;
+        // Recover from the secondary copy if the primary is missing or damaged.
+        let raw = primaryRaw;
+        let saved: Partial<StoreData> | null = null;
+        try { if (raw) saved = JSON.parse(raw) as Partial<StoreData>; } catch { saved = null; }
+        if (!saved && backupRaw) {
+          try { saved = JSON.parse(backupRaw) as Partial<StoreData>; raw = backupRaw; } catch { saved = null; }
+        }
+        if (saved) {
           const employees = saved.employees?.length ? saved.employees : [owner];
           setData({
             ...emptyData(),
@@ -364,7 +371,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // Serialize writes so rapid updates (e.g. checkout/stock) cannot race and overwrite newer state.
     saveChain.current = saveChain.current
       .catch(() => undefined)
-      .then(() => AsyncStorage.setItem(STORAGE_KEY, serialized))
+      .then(async () => {
+        await AsyncStorage.setItem(STORAGE_KEY, serialized);
+        // Keep a second verified recovery copy in the app's private storage.
+        await AsyncStorage.setItem(STORAGE_BACKUP_KEY, serialized);
+      })
       .catch(() => undefined);
 
     // Windows desktop: when the owner selects a Google Drive for desktop folder,
